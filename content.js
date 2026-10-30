@@ -50,13 +50,9 @@ async function toggle() {
   if (!url) return;
   const id = await chrome.runtime.sendMessage(url);
   if (!id) return alert(`${ch} isn't live on YouTube right now (${url})`);
-  await chrome.runtime.sendMessage('allowFrame');
-  const video = document.querySelector('video');
-  video?.pause();
-  // Start YouTube at Twitch's volume rather than its own default.
-  const vol = video ? Math.round((video.muted ? 0 : video.volume) * 100) : '';
+  document.querySelector('video')?.pause();
   frame = document.createElement('iframe');
-  frame.src = `https://www.youtube.com/watch?v=${id}&t2y=${vol}`;
+  frame.src = `https://www.youtube.com/embed/${id}?autoplay=1&t2y`;
   frame.allow = 'autoplay; fullscreen; picture-in-picture';
   frame.allowFullscreen = true;
   frame.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#000';
