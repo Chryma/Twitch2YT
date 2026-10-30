@@ -3,9 +3,27 @@ const YT_RE = /https?:\/\/(?:www\.)?youtube\.com\/(?:@[\w.-]+|channel\/UC[\w-]+|
 const channel = () => location.pathname.split('/')[1]?.toLowerCase();
 let frame = null;
 
+// Top-nav button, placed right after Twitch's ⋮ menu.
+const btn = document.createElement('button');
+btn.textContent = '▶ YouTube';
+btn.title = 'Swap to the streamer\'s YouTube live';
+btn.style.cssText = 'align-self:center;margin-left:8px;padding:4px 10px;border:0;border-radius:4px;background:#f00;color:#fff;' +
+  'font:600 13px Inter,Roobert,sans-serif;cursor:pointer;white-space:nowrap';
+btn.onclick = () => toggle();
+const label = () => btn.textContent = frame ? '■ Twitch' : '▶ YouTube';
+
+function mountButton() {
+  // Climb from the ⋮ button to its wrapper that sits directly in the nav's flex row.
+  let anchor = document.querySelector('button[data-a-target="ellipsis-button"]');
+  while (anchor?.parentElement && !(anchor.parentElement.children.length > 1 && getComputedStyle(anchor.parentElement).display.includes('flex')))
+    anchor = anchor.parentElement;
+  if (anchor && btn.previousElementSibling !== anchor) anchor.after(btn);
+}
+
 function restore() {
   frame?.remove();
   frame = null;
+  label();
   document.querySelector('video')?.play();
 }
 
@@ -39,6 +57,7 @@ async function toggle() {
   frame.allowFullscreen = true;
   frame.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#000';
   player.appendChild(frame);
+  label();
 }
 
 // Popup: 'state' asks whether we're swapped, 'toggle' swaps.
@@ -47,6 +66,10 @@ chrome.runtime.onMessage.addListener((msg, _, reply) => {
   if (msg === 'toggle') toggle();
 });
 
-// Twitch is a SPA: drop the YouTube frame when navigating to another channel.
+// Twitch is a SPA: drop the YouTube frame when navigating to another channel, and re-add the button if the nav re-renders.
 let last = location.pathname;
-setInterval(() => { if (location.pathname !== last) { last = location.pathname; restore(); } }, 1000);
+mountButton();
+setInterval(() => {
+  mountButton();
+  if (location.pathname !== last) { last = location.pathname; restore(); }
+}, 1000);
