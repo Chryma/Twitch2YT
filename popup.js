@@ -45,7 +45,10 @@ chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
   $('sub').textContent = 'On twitch.tv/' + ch;
   const saved = (await chrome.storage.sync.get('yt:' + ch))['yt:' + ch];
   if (!saved) tw.value = ch;
-  $('swap').onclick = () => chrome.tabs.sendMessage(tab.id, 'toggle').then(() => window.close(), () => alert('Reload the Twitch tab first'));
+  const swapped = await chrome.tabs.sendMessage(tab.id, 'state').catch(() => null);
+  if (swapped === null) return $('swap').textContent = 'Reload the Twitch tab first', $('swap').disabled = true;
+  if (swapped) $('swap').textContent = 'Back to Twitch';
+  $('swap').onclick = () => { chrome.tabs.sendMessage(tab.id, 'toggle'); window.close(); };
 });
 
 render();
