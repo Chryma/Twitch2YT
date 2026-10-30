@@ -58,3 +58,6 @@ btn.onclick = async e => {
 // Twitch is a SPA: drop the YouTube frame when navigating to another channel.
 let last = location.pathname;
 setInterval(() => { if (location.pathname !== last) { last = location.pathname; restore(); } }, 1000);
+
+// Popup's "Swap this stream" button.
+chrome.runtime.onMessage.addListener(msg => { if (msg === 'toggle') btn.click(); });
