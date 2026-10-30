@@ -42,7 +42,8 @@
       "js": [
         "embed.js"
       ],
-      "all_frames": true
+      "all_frames": true,
+      "world": "MAIN"
     }
   ]
 }
