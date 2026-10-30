@@ -25,6 +25,7 @@ if (new URLSearchParams(location.search).has('t2y')) {
   addEventListener('mousemove', wake, true);
   addEventListener('mousedown', wake, true);
   addEventListener('pause', wake, true);
+  root.addEventListener('mouseleave', () => { clearTimeout(timer); root.classList.add('t2y-idle'); });
 
   // Scroll over the player to change volume, like the Twitch scroll-volume extension (it can't see into our frame).
   const osd = document.createElement('div');
