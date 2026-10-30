@@ -40,18 +40,18 @@ async function ytUrl(ch) {
   return url;
 }
 
-// auto: swapping because we remembered this channel, so stay quiet if it can't be done.
-async function toggle(auto = false) {
-  const ch = channel();
-  if (frame) return chrome.storage.sync.remove('auto:' + ch), restore();
-  const player = document.querySelector('.video-player__container') || document.querySelector('.video-player');
-  if (!ch || !player) return auto || alert('No Twitch player on this page');
+const findPlayer = () => document.querySelector('.video-player__container') || document.querySelector('.video-player');
 
-  const url = await ytUrl(ch);
-  if (!url) return;
+// auto: swapping because we remembered this channel, so never prompt and stay quiet if it isn't live.
+async function liveId(ch, auto) {
+  const url = auto ? (await chrome.storage.sync.get('yt:' + ch))['yt:' + ch] : await ytUrl(ch);
+  if (!url) return null;
   const id = await chrome.runtime.sendMessage(url);
-  if (!id) return auto || alert(`${ch} isn't live on YouTube right now (${url})`);
-  if (frame || channel() !== ch) return; // a click or navigation happened while we were looking it up
+  if (!id && !auto) alert(`${ch} isn't live on YouTube right now (${url})`);
+  return id;
+}
+
+function show(player, id) {
   document.querySelector('video')?.pause();
   frame = document.createElement('iframe');
   frame.src = `https://www.youtube.com/embed/${id}?autoplay=1&t2y`;
@@ -60,14 +60,35 @@ async function toggle(auto = false) {
   frame.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#000';
   player.appendChild(frame);
   label();
+}
+
+async function toggle() {
+  const ch = channel();
+  if (frame) return chrome.storage.sync.remove('auto:' + ch), restore();
+  if (!ch || !findPlayer()) return alert('No Twitch player on this page');
+  const id = await liveId(ch);
+  if (!id || frame || channel() !== ch) return; // a click or navigation happened while we were looking it up
+  show(findPlayer(), id);
   chrome.storage.sync.set({ ['auto:' + ch]: true });
 }
 
-// Channels left on YouTube last time swap again when opened, once Twitch's player has rendered.
-let pending = null;
+// Channels left on YouTube last time: look the stream up as the page starts loading, keep Twitch hidden
+// and paused meanwhile, and drop YouTube in the moment Twitch's player exists.
+const hold = document.createElement('style');
+hold.textContent = '.video-player video{visibility:hidden}';
+// Twitch never plays underneath the YouTube frame (it resumes itself after ads etc.).
+addEventListener('play', e => { if (hold.isConnected || frame) e.target.pause(); }, true);
+
 async function checkAuto() {
   const ch = channel();
-  pending = ch && (await chrome.storage.sync.get('auto:' + ch))['auto:' + ch] ? ch : null;
+  if (!ch || !(await chrome.storage.sync.get('auto:' + ch))['auto:' + ch]) return;
+  document.documentElement.appendChild(hold);
+  const id = await liveId(ch, true);
+  let player;
+  while (id && !frame && channel() === ch && !(player = findPlayer())) await new Promise(r => setTimeout(r, 100));
+  hold.remove();
+  if (player && !frame && channel() === ch) show(player, id);
+  else if (!frame) document.querySelector('video')?.play();
 }
 
 // Popup: 'state' asks whether we're swapped, 'toggle' swaps.
@@ -83,8 +104,4 @@ checkAuto();
 setInterval(() => {
   mountButton();
   if (location.pathname !== last) { last = location.pathname; restore(); checkAuto(); }
-  if (pending && pending === channel() && !frame && document.querySelector('.video-player__container, .video-player')) {
-    pending = null;
-    toggle(true);
-  }
 }, 1000);
