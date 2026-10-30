@@ -34,7 +34,7 @@ async function toggle() {
   if (!id) return alert(`${ch} isn't live on YouTube right now (${url})`);
   document.querySelector('video')?.pause();
   frame = document.createElement('iframe');
-  frame.src = `https://www.youtube.com/embed/${id}?autoplay=1`;
+  frame.src = `https://www.youtube.com/embed/${id}?autoplay=1&t2y`;
   frame.allow = 'autoplay; fullscreen; picture-in-picture';
   frame.allowFullscreen = true;
   frame.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#000';
