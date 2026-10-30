@@ -27,12 +27,23 @@ if (new URLSearchParams(location.search).has('t2y')) {
   addEventListener('pause', wake, true);
 
   // Scroll over the player to change volume, like the Twitch scroll-volume extension (it can't see into our frame).
+  const osd = document.createElement('div');
+  osd.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;' +
+    'padding:6px 14px;border-radius:6px;background:rgba(0,0,0,.7);color:#fff;font:600 18px sans-serif;' +
+    'pointer-events:none;opacity:0;transition:opacity .3s';
+  let osdTimer;
   addEventListener('wheel', e => {
     const p = document.getElementById('movie_player');
     if (!p?.setVolume) return;
     e.preventDefault();
+    const vol = Math.max(0, Math.min(100, p.getVolume() + (e.deltaY < 0 ? 5 : -5)));
     p.unMute();
-    p.setVolume(Math.max(0, Math.min(100, p.getVolume() + (e.deltaY < 0 ? 5 : -5))));
+    p.setVolume(vol);
+    if (!osd.isConnected) document.body.appendChild(osd);
+    osd.textContent = `Volume ${vol}%`;
+    osd.style.opacity = 1;
+    clearTimeout(osdTimer);
+    osdTimer = setTimeout(() => { osd.style.opacity = 0; }, 1000);
     wake();
   }, { capture: true, passive: false });
 }
