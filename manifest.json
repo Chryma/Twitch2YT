@@ -27,15 +27,6 @@
       "32": "icons/icon32.png"
     }
   },
-  "declarative_net_request": {
-    "rule_resources": [
-      {
-        "id": "frame",
-        "enabled": true,
-        "path": "rules.json"
-      }
-    ]
-  },
   "content_scripts": [
     {
       "matches": [
