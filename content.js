@@ -40,16 +40,18 @@ async function ytUrl(ch) {
   return url;
 }
 
-async function toggle() {
-  if (frame) return restore();
+// auto: swapping because we remembered this channel, so stay quiet if it can't be done.
+async function toggle(auto = false) {
   const ch = channel();
+  if (frame) return chrome.storage.sync.remove('auto:' + ch), restore();
   const player = document.querySelector('.video-player__container') || document.querySelector('.video-player');
-  if (!ch || !player) return alert('No Twitch player on this page');
+  if (!ch || !player) return auto || alert('No Twitch player on this page');
 
   const url = await ytUrl(ch);
   if (!url) return;
   const id = await chrome.runtime.sendMessage(url);
-  if (!id) return alert(`${ch} isn't live on YouTube right now (${url})`);
+  if (!id) return auto || alert(`${ch} isn't live on YouTube right now (${url})`);
+  if (frame || channel() !== ch) return; // a click or navigation happened while we were looking it up
   document.querySelector('video')?.pause();
   frame = document.createElement('iframe');
   frame.src = `https://www.youtube.com/embed/${id}?autoplay=1&t2y`;
@@ -58,6 +60,14 @@ async function toggle() {
   frame.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#000';
   player.appendChild(frame);
   label();
+  chrome.storage.sync.set({ ['auto:' + ch]: true });
+}
+
+// Channels left on YouTube last time swap again when opened, once Twitch's player has rendered.
+let pending = null;
+async function checkAuto() {
+  const ch = channel();
+  pending = ch && (await chrome.storage.sync.get('auto:' + ch))['auto:' + ch] ? ch : null;
 }
 
 // Popup: 'state' asks whether we're swapped, 'toggle' swaps.
@@ -69,7 +79,12 @@ chrome.runtime.onMessage.addListener((msg, _, reply) => {
 // Twitch is a SPA: drop the YouTube frame when navigating to another channel, and re-add the button if the nav re-renders.
 let last = location.pathname;
 mountButton();
+checkAuto();
 setInterval(() => {
   mountButton();
-  if (location.pathname !== last) { last = location.pathname; restore(); }
+  if (location.pathname !== last) { last = location.pathname; restore(); checkAuto(); }
+  if (pending && pending === channel() && !frame && document.querySelector('.video-player__container, .video-player')) {
+    pending = null;
+    toggle(true);
+  }
 }, 1000);
