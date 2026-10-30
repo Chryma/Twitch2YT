@@ -25,4 +25,14 @@ if (new URLSearchParams(location.search).has('t2y')) {
   addEventListener('mousemove', wake, true);
   addEventListener('mousedown', wake, true);
   addEventListener('pause', wake, true);
+
+  // Scroll over the player to change volume, like the Twitch scroll-volume extension (it can't see into our frame).
+  addEventListener('wheel', e => {
+    const p = document.getElementById('movie_player');
+    if (!p?.setVolume) return;
+    e.preventDefault();
+    p.unMute();
+    p.setVolume(Math.max(0, Math.min(100, p.getVolume() + (e.deltaY < 0 ? 5 : -5))));
+    wake();
+  }, { capture: true, passive: false });
 }
