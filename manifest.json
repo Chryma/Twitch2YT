@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Twitch to YouTube",
+  "version": "1.0",
+  "description": "Button on Twitch that swaps the stream for the streamer's YouTube live.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.youtube.com/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{
+    "matches": ["https://www.twitch.tv/*"],
+    "js": ["content.js"]
+  }]
+}
