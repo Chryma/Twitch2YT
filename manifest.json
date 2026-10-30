@@ -4,8 +4,7 @@
   "version": "1.0",
   "description": "Swaps a Twitch stream for the streamer's YouTube live.",
   "permissions": [
-    "storage",
-    "declarativeNetRequest"
+    "storage"
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
@@ -38,10 +37,10 @@
     },
     {
       "matches": [
-        "https://www.youtube.com/watch*"
+        "https://www.youtube.com/embed/*"
       ],
       "js": [
-        "player.js"
+        "embed.js"
       ],
       "all_frames": true,
       "world": "MAIN"
