@@ -3,7 +3,8 @@
 // (YouTube waits ~3s+), and force the best quality.
 const HIDE_MS = 1000;
 
-if (window.top !== window && new URLSearchParams(location.search).has('t2y')) {
+// Keyed on the parent being Twitch, not our URL param: YouTube rewrites the URL and drops it.
+if (window.top !== window && location.ancestorOrigins?.[0] === 'https://www.twitch.tv') {
   document.documentElement.appendChild(document.createElement('style')).textContent = `
     html, body { overflow: hidden !important; background: #000 !important; }
     #masthead-container, tp-yt-app-drawer, ytd-mini-guide-renderer { display: none !important; }
@@ -12,10 +13,11 @@ if (window.top !== window && new URLSearchParams(location.search).has('t2y')) {
     html.t2y-idle * { cursor: none !important; }`;
 
   // The player sizes its video from its own box; nudge it once our CSS has moved it.
-  let applied;
+  let applied, vol = new URLSearchParams(location.search).get('t2y');
   setInterval(() => {
     const p = document.getElementById('movie_player');
     if (!p) return;
+    if (vol && p.setVolume) { p.setVolume(+vol); if (+vol) p.unMute(); vol = null; }
     if (p.dataset.t2ySized !== innerWidth + 'x' + innerHeight) { p.dataset.t2ySized = innerWidth + 'x' + innerHeight; dispatchEvent(new Event('resize')); }
     // Auto quality can settle low; apply the best once per new best level, so a quality picked by hand sticks.
     const best = p.getAvailableQualityLevels?.()[0];
