@@ -98,14 +98,26 @@ chrome.runtime.onMessage.addListener((msg, _, reply) => {
 });
 
 // Category pages default to "Recommended For You"; force highest viewers unless a sort was picked.
-function sortByViewers() {
-  if (/^\/directory\/(category|game)\//.test(location.pathname) && !location.search.includes('sort='))
-    location.replace(location.pathname + '?sort=VIEWER_COUNT');
+const unsorted = u => /^\/directory\/(category|game)\//.test(u.pathname) && !u.search.includes('sort=');
+// Direct loads: we run before Twitch boots, so rewriting the URL is enough. Later navs are caught by the click hook; reload is the fallback.
+function sortByViewers(boot) {
+  if (!unsorted(location)) return;
+  const url = location.pathname + '?sort=VIEWER_COUNT';
+  boot ? history.replaceState(history.state, '', url) : location.replace(url);
 }
+// In-app category links: send Twitch's router to the sorted URL instead (it re-renders on popstate).
+document.addEventListener('click', e => {
+  const a = e.target.closest?.('a[href]');
+  if (!a || e.button || e.ctrlKey || e.metaKey || e.shiftKey || !unsorted(new URL(a.href))) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  history.pushState(null, '', new URL(a.href).pathname + '?sort=VIEWER_COUNT');
+  dispatchEvent(new PopStateEvent('popstate', { state: null }));
+}, true);
 
 // Twitch is a SPA: drop the YouTube frame when navigating to another channel, and re-add the button if the nav re-renders.
 let last = location.pathname;
-sortByViewers();
+sortByViewers(true);
 mountButton();
 checkAuto();
 setInterval(() => {
