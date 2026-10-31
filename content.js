@@ -97,11 +97,18 @@ chrome.runtime.onMessage.addListener((msg, _, reply) => {
   if (msg === 'toggle') toggle();
 });
 
+// Category pages default to "Recommended For You"; force highest viewers unless a sort was picked.
+function sortByViewers() {
+  if (/^\/directory\/(category|game)\//.test(location.pathname) && !location.search.includes('sort='))
+    location.replace(location.pathname + '?sort=VIEWER_COUNT');
+}
+
 // Twitch is a SPA: drop the YouTube frame when navigating to another channel, and re-add the button if the nav re-renders.
 let last = location.pathname;
+sortByViewers();
 mountButton();
 checkAuto();
 setInterval(() => {
   mountButton();
-  if (location.pathname !== last) { last = location.pathname; restore(); checkAuto(); }
+  if (location.pathname !== last) { last = location.pathname; sortByViewers(); restore(); checkAuto(); }
 }, 1000);
