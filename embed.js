@@ -49,7 +49,7 @@ if (new URLSearchParams(location.search).has('t2y')) {
     const p = document.getElementById('movie_player');
     if (!p?.setVolume) return;
     e.preventDefault();
-    const vol = Math.max(0, Math.min(100, p.getVolume() + (e.deltaY < 0 ? 5 : -5)));
+    const vol = Math.max(0, Math.min(100, p.getVolume() + (e.deltaY < 0 ? 2 : -2)));
     p.unMute();
     p.setVolume(vol);
     if (!osd.isConnected) document.body.appendChild(osd);
