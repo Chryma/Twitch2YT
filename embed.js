@@ -27,6 +27,18 @@ if (new URLSearchParams(location.search).has('t2y')) {
   addEventListener('pause', wake, true);
   root.addEventListener('mouseleave', () => { clearTimeout(timer); root.classList.add('t2y-idle'); });
 
+  // Pause then play on a live stream jumps back to live. Seeking (while playing or paused) keeps the
+  // chosen spot, so scrubbing back still works.
+  let toLive = false;
+  addEventListener('pause', () => { toLive = true; }, true);
+  addEventListener('seeked', () => { toLive = false; }, true);
+  addEventListener('playing', () => { // not 'play': YouTube ignores a seek that early
+    const p = document.getElementById('movie_player');
+    if (!toLive || !p?.getVideoData?.().isLive) return;
+    toLive = false;
+    p.seekTo(p.getDuration(), true);
+  }, true);
+
   // Scroll over the player to change volume, like the Twitch scroll-volume extension (it can't see into our frame).
   const osd = document.createElement('div');
   osd.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;' +
