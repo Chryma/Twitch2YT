@@ -62,7 +62,12 @@ function show(player, id) {
   label();
 }
 
+// After the extension reloads, this copy in an already-open tab is cut off (chrome.* calls fail silently);
+// reloading the page brings in the new copy.
+const alive = () => chrome.runtime?.id || location.reload();
+
 async function toggle() {
+  if (!alive()) return;
   const ch = channel();
   if (frame) return chrome.storage.sync.remove('auto:' + ch), restore();
   if (!ch || !findPlayer()) return alert('No Twitch player on this page');
@@ -80,6 +85,7 @@ hold.textContent = '.video-player video{visibility:hidden}';
 addEventListener('play', e => { if (hold.isConnected || frame) e.target.pause(); }, true);
 
 async function checkAuto() {
+  if (!alive()) return;
   const ch = channel();
   if (!ch || !(await chrome.storage.sync.get('auto:' + ch))['auto:' + ch]) return;
   document.documentElement.appendChild(hold);
