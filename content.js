@@ -4,13 +4,44 @@ const channel = () => location.pathname.split('/')[1]?.toLowerCase();
 let frame = null;
 
 // Top-nav button, placed right after Twitch's ⋮ menu.
+// Built with createElementNS, not innerHTML, in case Twitch enforces Trusted Types.
+const NS = 'http://www.w3.org/2000/svg';
+const icon = paths => {
+  const s = document.createElementNS(NS, 'svg');
+  s.setAttribute('viewBox', '0 0 24 24');
+  for (const [d, fill] of paths) {
+    const p = s.appendChild(document.createElementNS(NS, 'path'));
+    p.setAttribute('d', d);
+    p.setAttribute('fill', fill);
+  }
+  return s;
+};
+const YT_ICON = icon([
+  ['M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8z', '#f00'],
+  ['M9.6 15.6 15.8 12 9.6 8.4z', '#fff'],
+]);
+const TW_ICON = icon([
+  ['M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0 1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z', '#9146ff'],
+]);
+
+// Matches Twitch's own secondary buttons (their CSS vars, with fallbacks if they rename them).
+document.documentElement.appendChild(document.createElement('style')).textContent = `
+.t2y-btn{align-self:center;display:flex;align-items:center;gap:6px;height:30px;margin-left:8px;padding:0 10px;border:0;border-radius:4px;
+  background:var(--color-background-button-secondary-default,#53535f61);color:var(--color-text-button-secondary,#efeff1);
+  font:600 13px Inter,Roobert,sans-serif;cursor:pointer;white-space:nowrap;transition:background .1s}
+.t2y-btn:hover{background:var(--color-background-button-secondary-hover,#53535f7a)}
+.t2y-btn svg{width:20px;height:20px;flex:none}`;
+
 const btn = document.createElement('button');
-btn.textContent = '▶ YouTube';
-btn.title = 'Swap to the streamer\'s YouTube live';
-btn.style.cssText = 'align-self:center;margin-left:8px;padding:4px 10px;border:0;border-radius:4px;background:#f00;color:#fff;' +
-  'font:600 13px Inter,Roobert,sans-serif;cursor:pointer;white-space:nowrap';
+btn.className = 't2y-btn';
 btn.onclick = () => toggle();
-const label = () => btn.textContent = frame ? '■ Twitch' : '▶ YouTube';
+const btnText = document.createElement('span');
+const label = () => {
+  btn.replaceChildren(frame ? TW_ICON : YT_ICON, btnText);
+  btnText.textContent = frame ? 'Switch to Twitch' : 'Switch to YouTube';
+  btn.title = frame ? 'Back to the Twitch stream' : 'Swap to the streamer\'s YouTube live';
+};
+label();
 
 function mountButton() {
   // Climb from the ⋮ button to its wrapper that sits directly in the nav's flex row.
@@ -82,13 +113,23 @@ async function toggle() {
 const hold = document.createElement('style');
 hold.textContent = '.video-player video{visibility:hidden}';
 // Twitch never plays underneath the YouTube frame (it resumes itself after ads etc.).
-addEventListener('play', e => { if (hold.isConnected || frame) e.target.pause(); }, true);
+// Twitch treats those interrupted plays as blocked autoplay and falls back to muted, which then carries over
+// to the next channel (same player, SPA nav). Undo that once Twitch plays again, unless you muted it yourself.
+let interrupted = false;
+addEventListener('play', e => { onNav(); if (hold.isConnected || frame) e.target.pause(), interrupted = true; }, true);
+addEventListener('playing', e => {
+  if (!interrupted || frame || hold.isConnected || !e.target.muted) return;
+  try { if (JSON.parse(localStorage.getItem('video-muted')).default) return; } catch {}
+  interrupted = false;
+  document.querySelector('button[data-a-target="player-mute-unmute-button"]')?.click(); // Twitch's own button keeps its UI in sync
+}, true);
 
 async function checkAuto() {
   if (!alive()) return;
   const ch = channel();
   if (!ch || !(await chrome.storage.sync.get('auto:' + ch))['auto:' + ch]) return;
   document.documentElement.appendChild(hold);
+  document.querySelector('video')?.pause(); // Twitch may already be playing this channel; hold only hides it
   const id = await liveId(ch, true);
   let player;
   while (id && !frame && channel() === ch && !(player = findPlayer())) await new Promise(r => setTimeout(r, 100));
@@ -126,7 +167,9 @@ let last = location.pathname;
 sortByViewers(true);
 mountButton();
 checkAuto();
-setInterval(() => {
-  mountButton();
-  if (location.pathname !== last) { last = location.pathname; sortByViewers(); restore(); checkAuto(); }
-}, 1000);
+// Also run from the play listener: Twitch starts the new channel before the 1s tick would notice the nav.
+function onNav() {
+  if (location.pathname === last) return;
+  last = location.pathname; sortByViewers(); restore(); checkAuto();
+}
+setInterval(() => { mountButton(); onNav(); }, 1000);
