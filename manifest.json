@@ -45,6 +45,17 @@
       ],
       "all_frames": true,
       "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/embed/*"
+      ],
+      "js": [
+        "volume.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
     }
   ]
 }
