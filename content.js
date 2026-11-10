@@ -82,10 +82,18 @@ async function liveId(ch, auto) {
   return id;
 }
 
+// Last YouTube volume, kept here because Brave wipes the embed's own storage when the tab closes (see volume.js).
+let ytVol;
+chrome.storage.local.get('vol').then(r => { ytVol = r.vol; });
+addEventListener('message', e => {
+  if (e.origin !== 'https://www.youtube.com' || e.source !== frame?.contentWindow || !Number.isInteger(e.data?.t2yVol)) return;
+  if (e.data.t2yVol !== ytVol && chrome.runtime?.id) chrome.storage.local.set({ vol: ytVol = e.data.t2yVol });
+});
+
 function show(player, id) {
   document.querySelector('video')?.pause();
   frame = document.createElement('iframe');
-  frame.src = `https://www.youtube.com/embed/${id}?autoplay=1&t2y`;
+  frame.src = `https://www.youtube.com/embed/${id}?autoplay=1&t2y${ytVol != null ? '&vol=' + ytVol : ''}`;
   frame.allow = 'autoplay; fullscreen; picture-in-picture';
   frame.allowFullscreen = true;
   frame.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#000';
