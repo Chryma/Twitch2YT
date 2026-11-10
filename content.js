@@ -1,6 +1,7 @@
 const YT_RE = /https?:\/\/(?:www\.)?youtube\.com\/(?:@[\w.-]+|channel\/UC[\w-]+|c\/[\w.-]+|user\/[\w.-]+)/i;
 
-const channel = () => location.pathname.split('/')[1]?.toLowerCase();
+// Only a channel's own page (/name) is its live stream; /name/clip/..., /name/videos etc. stay on Twitch.
+const channel = () => /^\/[^/]+\/?$/.test(location.pathname) ? location.pathname.split('/')[1].toLowerCase() : null;
 let frame = null;
 
 // Top-nav button, placed right after Twitch's ⋮ menu.
