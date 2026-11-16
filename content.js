@@ -1,4 +1,5 @@
 const YT_RE = /https?:\/\/(?:www\.)?youtube\.com\/(?:@[\w.-]+|channel\/UC[\w-]+|c\/[\w.-]+|user\/[\w.-]+)/i;
+const KICK_RE = /https?:\/\/(?:www\.)?kick\.com\/[\w-]+/i;
 
 // Only a channel's own page (/name) is its live stream; /name/clip/..., /name/videos etc. stay on Twitch.
 const channel = () => /^\/[^/]+\/?$/.test(location.pathname) ? location.pathname.split('/')[1].toLowerCase() : null;
@@ -24,6 +25,10 @@ const YT_ICON = icon([
 const TW_ICON = icon([
   ['M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0 1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z', '#9146ff'],
 ]);
+const KICK_ICON = icon([
+  ['M3 0h18a3 3 0 0 1 3 3v18a3 3 0 0 1-3 3H3a3 3 0 0 1-3-3V3a3 3 0 0 1 3-3z', '#53fc18'],
+  ['M6 4h4v5h2V7h2V4h4v5h-2v2h-2v2h2v2h2v5h-4v-3h-2v-2h-2v5H6z', '#000'],
+]);
 
 // Matches Twitch's own secondary buttons (their CSS vars, with fallbacks if they rename them).
 document.documentElement.appendChild(document.createElement('style')).textContent = `
@@ -33,18 +38,18 @@ document.documentElement.appendChild(document.createElement('style')).textConten
 .t2y-btn:hover{background:var(--color-background-button-secondary-hover,#53535f7a)}
 .t2y-btn svg{width:20px;height:20px;flex:none}
 .t2y-offer{position:fixed;top:58px;right:16px;z-index:5000;display:flex;align-items:center;gap:4px;padding:8px 8px 8px 12px;border-radius:6px;
-  background:var(--color-background-base,#18181b);color:var(--color-text-base,#efeff1);box-shadow:0 4px 16px #0009;font:13px Inter,Roobert,sans-serif}
-.t2y-offer a{color:inherit;font-weight:600}
-.t2y-offer .t2y-btn{margin-left:4px}`;
+  background:var(--color-background-base,#18181b);color:var(--color-text-base,#efeff1);box-shadow:0 4px 16px #0009;font:13px Inter,Roobert,sans-serif}.t2y-offer .t2y-btn{margin-left:4px}`;
 
 const btn = document.createElement('button');
 btn.className = 't2y-btn';
 btn.onclick = () => toggle();
 const btnText = document.createElement('span');
+let prefKick = false; // this channel's first saved choice is Kick, so the button says Kick
 const label = () => {
-  btn.replaceChildren(frame ? TW_ICON : YT_ICON, btnText);
-  btnText.textContent = frame ? 'Switch to Twitch' : 'Switch to YouTube';
-  btn.title = frame ? 'Back to the Twitch stream' : 'Swap to the streamer\'s YouTube live';
+  const kick = !frame && prefKick;
+  btn.replaceChildren(frame ? TW_ICON : kick ? KICK_ICON : YT_ICON, btnText);
+  btnText.textContent = frame ? 'Switch to Twitch' : kick ? 'Switch to Kick' : 'Switch to YouTube';
+  btn.title = frame ? 'Back to the Twitch stream' : 'Swap to the streamer\'s YouTube or Kick live';
 };
 label();
 
@@ -68,43 +73,52 @@ function restore() {
   document.querySelector('video')?.play();
 }
 
-async function ytUrl(ch) {
-  const key = 'yt:' + ch;
-  const saved = (await chrome.storage.sync.get(key))[key];
-  if (saved) return saved;
-  const found = [...document.querySelectorAll('a[href*="youtube.com/"]')].map(a => a.href.match(YT_RE)?.[0]).find(Boolean);
-  const input = prompt(`YouTube channel for ${ch} (URL or @handle):`, found || '@' + ch);
+// Saved YouTube/Kick URLs for ch, the one it was last left on first. auto is that URL (true, from before Kick, means YouTube).
+async function saved(ch) {
+  const s = await chrome.storage.sync.get(['yt:' + ch, 'kick:' + ch, 'auto:' + ch]);
+  const auto = s['auto:' + ch];
+  return { auto, urls: [s['yt:' + ch], s['kick:' + ch]].filter(Boolean).sort((a, b) => (b === auto) - (a === auto)) };
+}
+
+// Nothing saved for ch yet: ask, pre-filled from a link on the page or the same name on YouTube.
+async function addUrl(ch) {
+  const found = [...document.querySelectorAll('a[href*="youtube.com/"],a[href*="kick.com/"]')]
+    .map(a => a.href.match(YT_RE)?.[0] || a.href.match(KICK_RE)?.[0]).find(Boolean);
+  const input = prompt(`YouTube or Kick channel for ${ch} (YouTube URL or @handle, or kick.com/name):`, found || '@' + ch)?.trim();
   if (!input) return null;
-  const url = input.startsWith('@') ? 'https://www.youtube.com/' + input : input.trim();
-  if (!YT_RE.test(url)) return alert('Not a YouTube channel URL'), null;
-  await chrome.storage.sync.set({ [key]: url });
+  const url = input.startsWith('@') ? 'https://www.youtube.com/' + input : /^(www\.)?kick\.com\//i.test(input) ? 'https://' + input : input;
+  const key = KICK_RE.test(url) ? 'kick:' : YT_RE.test(url) ? 'yt:' : null;
+  if (!key) return alert('Not a YouTube or Kick channel URL'), null;
+  await chrome.storage.sync.set({ [key + ch]: url });
   return url;
 }
 
 const findPlayer = () => document.querySelector('.video-player__container') || document.querySelector('.video-player');
 
+// The first of ch's saved channels that's live, as [url, embed src], or [] if none is.
 // auto: swapping because we remembered this channel, so never prompt and stay quiet if it isn't live.
-async function liveId(ch, auto) {
-  const url = auto ? (await chrome.storage.sync.get('yt:' + ch))['yt:' + ch] : await ytUrl(ch);
-  if (!url) return null;
-  const id = await chrome.runtime.sendMessage(url);
-  if (!id && !auto) alert(`${ch} isn't live on YouTube right now (${url})`);
-  return id;
+async function liveSrc(ch, auto) {
+  let { urls } = await saved(ch);
+  if (!urls.length && !auto) urls = [await addUrl(ch)].filter(Boolean);
+  const srcs = await Promise.all(urls.map(u => chrome.runtime.sendMessage(u)));
+  const i = srcs.findIndex(Boolean);
+  if (i < 0 && urls.length && !auto) alert(`${ch} isn't live right now on ${urls.join(' or ')}`);
+  return i < 0 ? [] : [urls[i], srcs[i]];
 }
 
 // Last YouTube volume, kept here because Brave wipes the embed's own storage when the tab closes (see volume.js).
 let ytVol;
 chrome.storage.local.get('vol').then(r => { ytVol = r.vol; });
 addEventListener('message', e => {
-  if (e.origin !== 'https://www.youtube.com' || e.source !== frame?.contentWindow || !Number.isInteger(e.data?.t2yVol)) return;
+  if (!/^https:\/\/(www\.youtube|player\.kick)\.com$/.test(e.origin) || e.source !== frame?.contentWindow || !Number.isInteger(e.data?.t2yVol)) return;
   if (e.data.t2yVol !== ytVol && chrome.runtime?.id) chrome.storage.local.set({ vol: ytVol = e.data.t2yVol });
 });
 
-function show(player, id) {
+function show(player, src) {
   offer.remove();
   document.querySelector('video')?.pause();
   frame = document.createElement('iframe');
-  frame.src = `https://www.youtube.com/embed/${id}?autoplay=1&t2y${ytVol != null ? '&vol=' + ytVol : ''}`;
+  frame.src = `${src}&t2y${ytVol != null ? '&vol=' + ytVol : ''}`;
   frame.allow = 'autoplay; fullscreen; picture-in-picture';
   frame.allowFullscreen = true;
   frame.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#000';
@@ -121,10 +135,11 @@ async function toggle() {
   const ch = channel();
   if (frame) return chrome.storage.sync.remove('auto:' + ch), restore();
   if (!ch || !findPlayer()) return alert('No Twitch player on this page');
-  const id = await liveId(ch);
-  if (!id || frame || channel() !== ch) return; // a click or navigation happened while we were looking it up
-  show(findPlayer(), id);
-  chrome.storage.sync.set({ ['auto:' + ch]: true });
+  const [url, src] = await liveSrc(ch);
+  if (!src || frame || channel() !== ch) return; // a click or navigation happened while we were looking it up
+  prefKick = KICK_RE.test(url);
+  show(findPlayer(), src);
+  chrome.storage.sync.set({ ['auto:' + ch]: url });
 }
 
 // Channels left on YouTube last time: look the stream up as the page starts loading, keep Twitch hidden
@@ -147,49 +162,59 @@ async function checkAuto() {
   if (!alive()) return;
   const ch = channel();
   if (!ch) return;
-  if (!(await chrome.storage.sync.get('auto:' + ch))['auto:' + ch]) return suggest(ch);
+  const { urls, auto } = await saved(ch);
+  if (channel() !== ch) return;
+  prefKick = KICK_RE.test(urls[0]);
+  label();
+  if (!auto) return suggest(ch, urls.length);
   document.documentElement.appendChild(hold);
   document.querySelector('video')?.pause(); // Twitch may already be playing this channel; hold only hides it
-  const id = await liveId(ch, true);
+  const [, src] = await liveSrc(ch, true);
   let player;
-  while (id && !frame && channel() === ch && !(player = findPlayer())) await new Promise(r => setTimeout(r, 100));
+  while (src && !frame && channel() === ch && !(player = findPlayer())) await new Promise(r => setTimeout(r, 100));
   hold.remove();
-  if (player && !frame && channel() === ch) show(player, id);
+  if (player && !frame && channel() === ch) show(player, src);
   else if (!frame) document.querySelector('video')?.play();
 }
 
-// First visit to a channel with no YouTube saved: check once whether youtube.com/@<same name> is live, and offer it.
-// Each channel is only ever checked once, live or not; after that it's the button or the popup.
+// First visit to a channel with nothing saved: check once whether youtube.com/@<same name> or kick.com/<same name>
+// is live, and offer it. Each channel is only ever checked once, live or not; after that it's the button or the popup.
 // Kept in local storage, not sync: sync caps at 512 keys and this grows with every channel you open.
-async function suggest(ch) {
+async function suggest(ch, hasSaved) {
+  if (hasSaved) return;
   // Wait for a Twitch player, so /directory, /search and other non-channel pages never get checked.
   for (let i = 0; i < 100 && channel() === ch && !findPlayer(); i++) await new Promise(r => setTimeout(r, 100));
   if (channel() !== ch || !findPlayer()) return;
   const k = 'chk:' + ch;
-  if ((await chrome.storage.sync.get('yt:' + ch))['yt:' + ch] || (await chrome.storage.local.get(k))[k]) return;
+  if ((await chrome.storage.local.get(k))[k]) return;
   await chrome.storage.local.set({ [k]: 1 });
-  const url = 'https://www.youtube.com/@' + ch;
-  const id = await chrome.runtime.sendMessage(url);
-  if (!id || frame || channel() !== ch) return;
-  const link = document.createElement('a');
-  link.href = url;
-  link.target = '_blank';
-  link.textContent = '@' + ch;
-  const watch = document.createElement('button');
-  watch.className = 't2y-btn';
-  watch.append(YT_ICON.cloneNode(true), 'Watch');
-  watch.onclick = async () => {
-    const player = findPlayer();
-    if (!alive() || !player || channel() !== ch) return offer.remove();
-    await chrome.storage.sync.set({ ['yt:' + ch]: url, ['auto:' + ch]: true });
-    show(player, id);
-  };
+  const urls = ['https://www.youtube.com/@' + ch, 'https://kick.com/' + ch];
+  const srcs = await Promise.all(urls.map(u => chrome.runtime.sendMessage(u)));
+  if (!srcs.some(Boolean) || frame || channel() !== ch) return;
+  // Watching either one saves every live one, so the button can fall back to the other later.
+  const found = {};
+  const buttons = urls.flatMap((url, i) => {
+    if (!srcs[i]) return [];
+    found[(i ? 'kick:' : 'yt:') + ch] = url;
+    const b = document.createElement('button');
+    b.className = 't2y-btn';
+    b.title = url;
+    b.append((i ? KICK_ICON : YT_ICON).cloneNode(true), i ? 'Kick' : 'YouTube');
+    b.onclick = async () => {
+      const player = findPlayer();
+      if (!alive() || !player || channel() !== ch) return offer.remove();
+      await chrome.storage.sync.set({ ...found, ['auto:' + ch]: url });
+      prefKick = !!i;
+      show(player, srcs[i]);
+    };
+    return [b];
+  });
   const close = document.createElement('button');
   close.className = 't2y-btn';
   close.textContent = '✕';
   close.title = 'Not this one (it won\'t ask again)';
   close.onclick = () => offer.remove();
-  offer.replaceChildren(link, ' is live on YouTube', watch, close);
+  offer.replaceChildren(ch + ' is live on', ...buttons, close);
   document.body.appendChild(offer);
 }
 

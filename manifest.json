@@ -8,7 +8,8 @@
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
-    "https://www.twitch.tv/*"
+    "https://www.twitch.tv/*",
+    "https://kick.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -49,6 +50,17 @@
     {
       "matches": [
         "https://www.youtube.com/embed/*"
+      ],
+      "js": [
+        "volume.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://player.kick.com/*"
       ],
       "js": [
         "volume.js"

@@ -1,6 +1,6 @@
 # Twitch to YouTube
 
-A Chrome extension that swaps a Twitch stream for the same streamer's YouTube live, right inside the Twitch page. Twitch chat, the sidebar and everything else stay where they are, and only the video player changes.
+A Chrome extension that swaps a Twitch stream for the same streamer's YouTube or Kick live, right inside the Twitch page. Twitch chat, the sidebar and everything else stay where they are, and only the video player changes.
 
 ## Install
 
@@ -14,12 +14,15 @@ To update, replace the folder with the new version and click the reload icon on 
 ## Use
 
 - On any Twitch channel, click **Switch to YouTube** in the top nav (next to the ⋮ menu), or open the extension popup and click **Swap this stream**.
-- The first time you swap a channel it asks for the streamer's YouTube channel. It pre-fills one if the Twitch page links to a YouTube channel. You can enter a URL or an `@handle`.
-- The first time you open a channel you haven't set up, it checks once whether YouTube's `@<same name>` is live, and if so offers to switch in a small box at the top right. Each channel is only checked once, live or not, so after that use the button or the popup.
+- The first time you swap a channel it asks for the streamer's YouTube or Kick channel. It pre-fills one if the Twitch page links to one, or the same name on YouTube. Enter a YouTube URL or `@handle`, or `kick.com/name`.
+- A channel can have both a YouTube and a Kick channel saved (add the second one in the popup). The button then plays whichever is live, trying the one you used last first.
+- The first time you open a channel you haven't set up, it checks once whether YouTube's `@<same name>` or `kick.com/<same name>` is live, and if so offers to switch in a small box at the top right. Each channel is only checked once, live or not, so after that use the button or the popup.
 - Click **Switch to Twitch** to switch back.
 - Twitch stays paused and silent underneath the YouTube player, including when you move between channels. Switching back to Twitch, or moving to a channel without YouTube, brings its sound back.
 - If you leave a channel on YouTube, it opens straight into YouTube the next time you visit it. Switching back to Twitch turns that off.
 - The popup lists your saved channels. Click a channel to edit it, or click ✕ to remove it. Saved channels sync through your browser account.
+
+YouTube and Kick share one remembered volume. Kick's embed plays at up to 720p, and has no quality menu.
 
 ## Extras in the YouTube player
 
@@ -36,6 +39,7 @@ Twitch category pages open sorted by **highest viewers** instead of "Recommended
 
 - `twitch.tv`: adds the button and the YouTube player.
 - `youtube.com`: checks whether a channel is live (`/live`) and controls the embedded player.
+- `kick.com`: checks whether a Kick channel is live.
 - `storage`: remembers your channel mappings.
 
-Nothing is sent anywhere except Twitch and YouTube.
+Nothing is sent anywhere except Twitch, YouTube and Kick.

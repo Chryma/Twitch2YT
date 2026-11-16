@@ -1,11 +1,12 @@
 const YT_RE = /^https?:\/\/(?:www\.)?youtube\.com\/(?:@[\w.-]+|channel\/UC[\w-]+|c\/[\w.-]+|user\/[\w.-]+)/i;
+const KICK_RE = /^https?:\/\/(?:www\.)?kick\.com\/[\w-]+/i;
 const $ = id => document.getElementById(id);
 const tw = $('tw'), yt = $('yt'), list = $('list');
 
 async function render() {
   const all = await chrome.storage.sync.get(null);
-  const rows = Object.keys(all).filter(k => k.startsWith('yt:')).sort().map(k => {
-    const ch = k.slice(3), row = document.createElement('div');
+  const rows = Object.keys(all).filter(k => /^(yt|kick):/.test(k)).map(k => [k.slice(k.indexOf(':') + 1), k]).sort().map(([ch, k]) => {
+    const row = document.createElement('div');
     row.className = 'row';
     const name = document.createElement('span');
     name.title = 'Edit';
@@ -14,7 +15,7 @@ async function render() {
     const link = document.createElement('a');
     link.href = all[k];
     link.target = '_blank';
-    link.textContent = all[k].replace(/^https?:\/\/(www\.)?youtube\.com\//, '');
+    link.textContent = all[k].replace(/^https?:\/\/(www\.)?/, '');
     name.append(ch + ' → ', link);
     const x = document.createElement('button');
     x.textContent = '✕';
@@ -30,9 +31,10 @@ async function render() {
 $('add').onsubmit = async e => {
   e.preventDefault();
   const v = yt.value.trim();
-  const url = v.startsWith('@') ? 'https://www.youtube.com/' + v : v;
-  if (!YT_RE.test(url)) return yt.setCustomValidity('Not a YouTube channel URL'), yt.reportValidity();
-  await chrome.storage.sync.set({ ['yt:' + tw.value.trim().toLowerCase()]: url });
+  const url = v.startsWith('@') ? 'https://www.youtube.com/' + v : /^(www\.)?kick\.com\//i.test(v) ? 'https://' + v : v;
+  const key = KICK_RE.test(url) ? 'kick:' : YT_RE.test(url) ? 'yt:' : null;
+  if (!key) return yt.setCustomValidity('Not a YouTube or Kick channel URL'), yt.reportValidity();
+  await chrome.storage.sync.set({ [key + tw.value.trim().toLowerCase()]: url });
   tw.value = yt.value = '';
   render();
 };
@@ -43,8 +45,8 @@ chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
   if (!ch) return;
   $('swapCard').hidden = false;
   $('sub').textContent = 'On twitch.tv/' + ch;
-  const saved = (await chrome.storage.sync.get('yt:' + ch))['yt:' + ch];
-  if (!saved) tw.value = ch;
+  const saved = await chrome.storage.sync.get(['yt:' + ch, 'kick:' + ch]);
+  if (!Object.keys(saved).length) tw.value = ch;
   const swapped = await chrome.tabs.sendMessage(tab.id, 'state').catch(() => null);
   if (swapped === null) return $('swap').textContent = 'Reload the Twitch tab first', $('swap').disabled = true;
   if (swapped) $('swap').textContent = 'Back to Twitch';
