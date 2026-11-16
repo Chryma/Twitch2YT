@@ -15,6 +15,7 @@ To update, replace the folder with the new version and click the reload icon on 
 
 - On any Twitch channel, click **Switch to YouTube** in the top nav (next to the ⋮ menu), or open the extension popup and click **Swap this stream**.
 - The first time you swap a channel it asks for the streamer's YouTube channel. It pre-fills one if the Twitch page links to a YouTube channel. You can enter a URL or an `@handle`.
+- The first time you open a channel you haven't set up, it checks once whether YouTube's `@<same name>` is live, and if so offers to switch in a small box at the top right. Each channel is only checked once, live or not, so after that use the button or the popup.
 - Click **Switch to Twitch** to switch back.
 - Twitch stays paused and silent underneath the YouTube player, including when you move between channels. Switching back to Twitch, or moving to a channel without YouTube, brings its sound back.
 - If you leave a channel on YouTube, it opens straight into YouTube the next time you visit it. Switching back to Twitch turns that off.

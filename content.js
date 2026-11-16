@@ -31,7 +31,11 @@ document.documentElement.appendChild(document.createElement('style')).textConten
   background:var(--color-background-button-secondary-default,#53535f61);color:var(--color-text-button-secondary,#efeff1);
   font:600 13px Inter,Roobert,sans-serif;cursor:pointer;white-space:nowrap;transition:background .1s}
 .t2y-btn:hover{background:var(--color-background-button-secondary-hover,#53535f7a)}
-.t2y-btn svg{width:20px;height:20px;flex:none}`;
+.t2y-btn svg{width:20px;height:20px;flex:none}
+.t2y-offer{position:fixed;top:58px;right:16px;z-index:5000;display:flex;align-items:center;gap:4px;padding:8px 8px 8px 12px;border-radius:6px;
+  background:var(--color-background-base,#18181b);color:var(--color-text-base,#efeff1);box-shadow:0 4px 16px #0009;font:13px Inter,Roobert,sans-serif}
+.t2y-offer a{color:inherit;font-weight:600}
+.t2y-offer .t2y-btn{margin-left:4px}`;
 
 const btn = document.createElement('button');
 btn.className = 't2y-btn';
@@ -52,7 +56,12 @@ function mountButton() {
   if (anchor && btn.previousElementSibling !== anchor) anchor.after(btn);
 }
 
+// "<name> is live on YouTube" toast, shown by suggest().
+const offer = document.createElement('div');
+offer.className = 't2y-offer';
+
 function restore() {
+  offer.remove();
   frame?.remove();
   frame = null;
   label();
@@ -64,7 +73,7 @@ async function ytUrl(ch) {
   const saved = (await chrome.storage.sync.get(key))[key];
   if (saved) return saved;
   const found = [...document.querySelectorAll('a[href*="youtube.com/"]')].map(a => a.href.match(YT_RE)?.[0]).find(Boolean);
-  const input = prompt(`YouTube channel for ${ch} (URL or @handle):`, found || '');
+  const input = prompt(`YouTube channel for ${ch} (URL or @handle):`, found || '@' + ch);
   if (!input) return null;
   const url = input.startsWith('@') ? 'https://www.youtube.com/' + input : input.trim();
   if (!YT_RE.test(url)) return alert('Not a YouTube channel URL'), null;
@@ -92,6 +101,7 @@ addEventListener('message', e => {
 });
 
 function show(player, id) {
+  offer.remove();
   document.querySelector('video')?.pause();
   frame = document.createElement('iframe');
   frame.src = `https://www.youtube.com/embed/${id}?autoplay=1&t2y${ytVol != null ? '&vol=' + ytVol : ''}`;
@@ -136,7 +146,8 @@ addEventListener('playing', e => {
 async function checkAuto() {
   if (!alive()) return;
   const ch = channel();
-  if (!ch || !(await chrome.storage.sync.get('auto:' + ch))['auto:' + ch]) return;
+  if (!ch) return;
+  if (!(await chrome.storage.sync.get('auto:' + ch))['auto:' + ch]) return suggest(ch);
   document.documentElement.appendChild(hold);
   document.querySelector('video')?.pause(); // Twitch may already be playing this channel; hold only hides it
   const id = await liveId(ch, true);
@@ -145,6 +156,41 @@ async function checkAuto() {
   hold.remove();
   if (player && !frame && channel() === ch) show(player, id);
   else if (!frame) document.querySelector('video')?.play();
+}
+
+// First visit to a channel with no YouTube saved: check once whether youtube.com/@<same name> is live, and offer it.
+// Each channel is only ever checked once, live or not; after that it's the button or the popup.
+// Kept in local storage, not sync: sync caps at 512 keys and this grows with every channel you open.
+async function suggest(ch) {
+  // Wait for a Twitch player, so /directory, /search and other non-channel pages never get checked.
+  for (let i = 0; i < 100 && channel() === ch && !findPlayer(); i++) await new Promise(r => setTimeout(r, 100));
+  if (channel() !== ch || !findPlayer()) return;
+  const k = 'chk:' + ch;
+  if ((await chrome.storage.sync.get('yt:' + ch))['yt:' + ch] || (await chrome.storage.local.get(k))[k]) return;
+  await chrome.storage.local.set({ [k]: 1 });
+  const url = 'https://www.youtube.com/@' + ch;
+  const id = await chrome.runtime.sendMessage(url);
+  if (!id || frame || channel() !== ch) return;
+  const link = document.createElement('a');
+  link.href = url;
+  link.target = '_blank';
+  link.textContent = '@' + ch;
+  const watch = document.createElement('button');
+  watch.className = 't2y-btn';
+  watch.append(YT_ICON.cloneNode(true), 'Watch');
+  watch.onclick = async () => {
+    const player = findPlayer();
+    if (!alive() || !player || channel() !== ch) return offer.remove();
+    await chrome.storage.sync.set({ ['yt:' + ch]: url, ['auto:' + ch]: true });
+    show(player, id);
+  };
+  const close = document.createElement('button');
+  close.className = 't2y-btn';
+  close.textContent = '✕';
+  close.title = 'Not this one (it won\'t ask again)';
+  close.onclick = () => offer.remove();
+  offer.replaceChildren(link, ' is live on YouTube', watch, close);
+  document.body.appendChild(offer);
 }
 
 // Popup: 'state' asks whether we're swapped, 'toggle' swaps.
